@@ -1,0 +1,7 @@
+redis_server:
+  enabled: true
+arangodb_server:
+  enabled: true
+passwd_login:
+  enabled: true
+arango_root_pass: NG1CWHSQPcJDEmBHIMp

@@ -1,0 +1,9 @@
+[db_servers]
+
+
+[local]
+localhost              ansible_connection=local
+# examples
+# other1.example.com     ansible_connection=ssh        ansible_user=myuser ansible_password=mypass (can be $PASS as system env. "read -s PASS")
+# other2.example.com     ansible_connection=ssh        ansible_user=myuser
+##

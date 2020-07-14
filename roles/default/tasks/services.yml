@@ -1,0 +1,123 @@
+---
+- name: Run "apt-get update"
+  become: true
+  apt:
+    update_cache: yes
+  ignore_errors: True
+
+- name: Password auth turning on
+  lineinfile: 
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    insertafter: '^#PasswordAuthentication'
+    line: 'PasswordAuthentication yes'
+    state: present
+    create: true
+  when: ( passwd_login.enabled == True )
+
+- name: Password auth turning off
+  lineinfile: 
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    insertafter: '^#PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+    create: true
+  when: ( passwd_login.enabled != True )
+
+- name: Root login switching off
+  lineinfile: 
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    insertafter: '^#PermitRootLogin'
+    line: 'PermitRootLogin prohibit-password' ## Disable root login by password auth
+    state: present
+    create: true
+
+- name: Install fail2ban daemon
+  package: pkg=fail2ban state=present
+  become: true
+  when: ( passwd_login.enabled == True )
+
+- name: Send the fail2ban config
+  copy: 
+   src: roles/default/files/jail.conf_distr
+   dest: /etc/fail2ban/jail.conf
+   owner: root
+   group: root
+   mode: 0644
+  notify: 
+  - fail2ban reload
+  when: ( passwd_login.enabled == True )
+
+- name: fail2ban starting check
+  service: name=fail2ban state=started
+  when: ( passwd_login.enabled == True )
+
+######## REDIS
+
+- name: Install Redis Server
+  package: pkg={{ item }} state=present
+  with_items:
+    - redis-server
+  when: ( redis_server.enabled == true )
+
+- name: Redis config installation
+  copy: src=redis/redis.conf dest=/etc/redis/redis.conf
+  notify: 
+  - redis restart
+  when: ( redis_server.enabled == true )
+
+######## ARANGO
+- name: Install Arango Server Dependencies
+  package: pkg={{ item }} state=present
+  with_items:
+    - debconf-utils
+    - apt-transport-https
+  when: ( arangodb_server.enabled == true )
+
+- name: ArangoDB repo key adding
+  apt_key:
+    url: https://download.arangodb.com/arangodb34/DEBIAN/Release.key
+    state: present
+
+- name: ArangoDB repo adding
+  apt_repository:
+    repo: deb https://download.arangodb.com/arangodb34/DEBIAN/ /
+    state: present
+
+- name: Run "apt-get update"
+  become: true
+  apt:
+    update_cache: yes
+  ignore_errors: True
+
+- name: Set Pre Install Params
+  shell: |
+    echo arangodb3 arangodb3/password string "{{ arango_root_pass|quote }}" | debconf-set-selections
+    echo arangodb3 arangodb3/password_again string "{{ arango_root_pass|quote }}" | debconf-set-selections
+    echo arangodb3 arangodb3/upgrade boolean false | debconf-set-selections
+    echo arangodb3 arangodb3/storage_engine string 1 | debconf-set-selections
+    echo arangodb3 arangodb3/backup boolean false | debconf-set-selections
+  when: ( arangodb_server.enabled == true )
+
+- name: Install Arango Server
+  package: pkg={{ item }} state=present
+  with_items:
+    - arangodb3
+  when: ( arangodb_server.enabled == true )
+
+- name: Arango config installation
+  copy: src=roles/default/files/arango/arangod.conf dest=/etc/arangodb3/arangod.conf
+  notify: 
+  - arango restart
+  when: ( arangodb_server.enabled == true )
+
+########
+- name: Additional App install
+  package: pkg={{ item }} state=present
+  with_items:
+    - vim
+    - wget
+    - curl
+    - git
